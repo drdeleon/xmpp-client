@@ -1,6 +1,7 @@
 
 import asyncio
 import logging
+import settings
 
 from slixmpp import ClientXMPP
 
@@ -42,6 +43,6 @@ if __name__ == '__main__':
         format='%(levelname)-8s %(message)s'
     )
 
-    xmpp = EchoBot('somejid@example.com', 'use_getpass')
+    xmpp = EchoBot(settings.JID, settings.PASSWORD)
     xmpp.connect()
     xmpp.process()
