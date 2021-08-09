@@ -21,9 +21,7 @@ class Client(slixmpp.ClientXMPP):
         self.register_plugin('xep_0199') # XMPP Ping
         self.register_plugin('xep_0059')
         self.register_plugin('xep_0060')
-        #Registration
-        self.register_plugin('xep_0077')
-        #MUC
+        self.register_plugin('xep_0077') # In-Band Registration
         self.register_plugin('xep_0045') # Multi-User Chat
 
         # Event handlers
@@ -31,32 +29,29 @@ class Client(slixmpp.ClientXMPP):
         self.add_event_handler("session_start", self.app)
         self.add_event_handler("message", self.recv_message)
         self.add_event_handler("groupchat_message", self.recv_muc_message)
+        self.add_event_handler("changed_status", self.wait_for_presences)
 
+        self.received = set()
+        self.presences_received = asyncio.Event()
 
-        # Here's how to access plugins once you've registered them:
-        # self['xep_0030'].add_feature('echo_demo')
 
     async def session_start(self, event):
         """ Session start. Must send presence to server and get JID's roster. """
 
-        self.send_presence()
         try:
-            await self.get_roster() # Denfesive programming could be added.
-
-            print(self.client_roster)
-        except IqError as e:
-            logging.error(f"Could not get roster: {e.iq['error']['text']}")
-            self.disconnect()
+            await self.get_roster()
+        except IqError as err:
+            print('Error: %s' % err.iq['error']['condition'])
         except IqTimeout:
-            logging.error(f"Timeout while getting roster.")
-            self.disconnect()
+            print('Error: Request timed out')
+        self.send_presence()
+
 
     async def unregister(self):
         """ Unregister an account. """
         resp = self.Iq()
         resp['type'] = 'set'
         resp['register']['remove'] = True
-
 
         try:
             await resp.send()
@@ -68,6 +63,7 @@ class Client(slixmpp.ClientXMPP):
         except IqTimeout:
             logging.error("No response from server.")
             self.disconnect()
+
 
     def recv_message(self, msg):
         """ Handles incoming messages. """
@@ -85,22 +81,15 @@ class Client(slixmpp.ClientXMPP):
         elif msg['type'] in ('groupchat'):
             print('Groupchat message received.')
 
+
     def message(self, recipient, message, mtype='chat'):
         """ Sends message to another user in server. """
 
         self.send_message(recipient, message, mtype)
 
+
     def recv_muc_message(self, msg):
-        """ Process incoming message stanzas from any chat room. Be aware
-            that if you also have any handlers for the 'message' event,
-            message stanzas may be processed by both handlers, so check
-            the 'type' attribute when using a 'message' event handler.
-
-            Whenever the bot's nickname is mentioned, respond to
-            the message.
-
-            This handler will reply to messages that mention
-            the bot's nickname.
+        """ Process incoming message stanzas from any chat room.
 
             Arguments:
                 msg -- The received message stanza. See the documentation
@@ -109,11 +98,13 @@ class Client(slixmpp.ClientXMPP):
         """
 
         if msg['mucnick'] != self.nick and self.nick in msg['body']:
-            self.send_message(
-                mto=msg['from'].bare,
-                mbody="I heard that, %s." % msg['mucnick'],
-                mtype='groupchat'
-            )
+            logging.info(f"You've been mentioned by {msg['mucnick']}")
+            # self.send_message(
+            #     mto=msg['from'].bare,
+            #     mbody="I heard that, %s." % msg['mucnick'],
+            #     mtype='groupchat'
+            # )
+
 
     def muc_online(self, presence):
         """ Process a presence stanza from a chat room. In this case,
@@ -127,55 +118,99 @@ class Client(slixmpp.ClientXMPP):
                             to see how else it may be used.
         """
 
-        if presence['muc']['nick'] != self.nick:
-            self.send_message(
-                mto=presence['from'].bare,
-                mbody=f"Hello, %{presence['muc']['role']} %{presence['muc']['nick']}",
-                mtype='groupchat'
-            )
+        print("Presence stanza: ", presence)
+
+        # if presence['muc']['nick'] != self.nick:
+        #     self.send_message(
+        #         mto=presence['from'].bare,
+        #         mbody=f"Hello, %{presence['muc']['role']} %{presence['muc']['nick']}",
+        #         mtype='groupchat'
+        #     )
+
+
+    def wait_for_presences(self, pres):
+        """ Track how many roster entries have received presence updates. """
+
+        print("Recv presence:", pres)
+
+        self.received.add(pres['from'].bare)
+        if len(self.received) >= len(self.client_roster.keys()):
+            self.presences_received.set()
+        else:
+            self.presences_received.clear()
+
+
+    def print_roster(self):
+        print('Roster for %s' % self.boundjid.bare)
+        groups = self.client_roster.groups()
+        for group in groups:
+            print('\n%s' % group)
+            print('-' * 72)
+            for jid in groups[group]:
+                sub = self.client_roster[jid]['subscription']
+                name = self.client_roster[jid]['name']
+                if self.client_roster[jid]['name']:
+                    print(' %s (%s) [%s]' % (name, jid, sub))
+                else:
+                    print(' %s [%s]' % (jid, sub))
+
+                connections = self.client_roster.presence(jid)
+                for res, pres in connections.items():
+                    show = 'available'
+                    if pres['show']:
+                        show = pres['show']
+                    print('   - %s (%s)' % (res, show))
+                    if pres['status']:
+                        print('       %s' % pres['status'])
+
 
     async def app(self, event):
         IN_APP_LOOP = True
 
         while IN_APP_LOOP:
+
             print(settings.MAIN_MENU)
             option = int(await ainput("\nSelect an option: "))
 
-            if option==1: # Add contact
-                print("Ingrese el contacto que desea agregar:")
+            if option==1: # Show roster
+                self.print_roster()
+
+            elif option==2: # Add contact
+                recipient = str(await ainput("\nUsername of new contact: "))
+                self.send_presence_subscription(pto=recipient)
+
+            elif option==3: # Show contact details
+                print(self.client_roster)
                 pass
 
-            elif option==2: # Show contact details
-                print("Show contact details")
-                pass
-
-            elif option==3: # Send direct message
+            elif option==4: # Send direct message
                 recipient = str(await ainput("Send message to: "))
                 msg = str(await ainput(">>: "))
 
                 self.message(recipient, msg)
-                pass
 
-            elif option==4: # Change presence
+            elif option==5: # Change presence
                 print("Change presence")
                 pass
 
-            elif option==5: # Groupchat
-                print("Groupchat")
-                pass
+            elif option==6: # Groupchat
+                recipient = str(await ainput("Groupchat: "))
+                msg = str(await ainput(">>: "))
 
-            elif option==6: # Logout
+                self.message(recipient, msg, mtype='groupchat')
+
+            elif option==7: # Logout
                 print("Logout")
                 IN_APP_LOOP = False
                 self.disconnect()
                 pass
 
-            elif option==7: # Delete my account
+            elif option==8: # Delete my account
                 print("Delete my account")
                 await self.unregister()
                 pass
 
-            elif option==8: # Exit
+            elif option==9: # Exit
                 print("Exit")
                 print("Goodbye!")
                 sys.exit()

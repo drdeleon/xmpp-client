@@ -32,12 +32,13 @@ MAIN_MENU = """
     -------------------------------
                 MAIN MENU
     -------------------------------
-        1. Add contact
-        2. Show contact details
-        3. Send direct message
-        4. Change presence
-        5. Start groupchat
-        6. Logout
-        7. Delete my account
-        8. Exit
+        1. Show roster
+        2. Add contact
+        3. Show contact details
+        4. Send direct message
+        5. Change presence
+        6. Start groupchat
+        7. Logout
+        8. Delete my account
+        9. Exit
 """
