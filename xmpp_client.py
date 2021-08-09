@@ -1,23 +1,19 @@
 
 import asyncio
 import logging
-from re import L
+from re import L, M
 import settings
-
+import sys
 
 import slixmpp
-from slixmpp.exceptions import IqError, IqTimeout
+from slixmpp.exceptions import IqError, IqTimeout, XMPPError
+from aioconsole import ainput
 
 
 class Client(slixmpp.ClientXMPP):
 
     def __init__(self, jid, password):
-        slixmpp.ClientXMPP.__init__(self, jid, password)
-
-        self.add_event_handler("session_start", self.session_start)
-        self.add_event_handler("message", self.rcv_message)
-        self.add_event_handler("register", self.register)
-        self.add_event_handler("groupchat_message", self.rcv_muc_message)
+        super().__init__(jid, password)
 
         #Plugins
 
@@ -25,16 +21,20 @@ class Client(slixmpp.ClientXMPP):
         self.register_plugin('xep_0199') # XMPP Ping
         self.register_plugin('xep_0059')
         self.register_plugin('xep_0060')
-        # Registration
-        self.register_plugin('xep_0004') # Data forms
-        self.register_plugin('xep_0066') # Out-of-band Data 
-        self.register_plugin('xep_0077') # In-band Registration
+        #Registration
+        self.register_plugin('xep_0077')
         #MUC
         self.register_plugin('xep_0045') # Multi-User Chat
 
+        # Event handlers
+        self.add_event_handler("session_start", self.session_start)
+        self.add_event_handler("session_start", self.app)
+        self.add_event_handler("message", self.recv_message)
+        self.add_event_handler("groupchat_message", self.recv_muc_message)
+
+
         # Here's how to access plugins once you've registered them:
         # self['xep_0030'].add_feature('echo_demo')
-
 
     async def session_start(self, event):
         """ Session start. Must send presence to server and get JID's roster. """
@@ -42,44 +42,26 @@ class Client(slixmpp.ClientXMPP):
         self.send_presence()
         try:
             await self.get_roster() # Denfesive programming could be added.
+
+            print(self.client_roster)
         except IqError as e:
             logging.error(f"Could not get roster: {e.iq['error']['text']}")
             self.disconnect()
-
-
-    async def register(self, iq):
-        """ Fill out and submit a registration form. """
-
-        print("ATTEMPT - REGISTER")
-
-        resp = self.Iq()
-        resp['type'] = 'set'
-        resp['register']['username'] = self.boundjid.user
-        resp['register']['password'] = self.password
-
-        try:
-            await resp.send()
-            logging.info("Account created for %s!" % self.boundjid)
-
-        except IqError as e:
-            logging.error(f"Could not register account: {e.iq['error']['text']}")
-            self.disconnect()
         except IqTimeout:
-            logging.error("No response from server.")
+            logging.error(f"Timeout while getting roster.")
             self.disconnect()
 
-
-    async def unregister(self, iq):
+    async def unregister(self):
         """ Unregister an account. """
-
         resp = self.Iq()
         resp['type'] = 'set'
-        resp['register']['remove'] = ''
+        resp['register']['remove'] = True
 
-        print(resp)
 
         try:
             await resp.send()
+            logging.info("Account removed successfully.")
+            self.disconnect()
         except IqError as e:
             print("Could not remove account.")
             logging.error(f"Could not remove account: {e}")
@@ -87,12 +69,12 @@ class Client(slixmpp.ClientXMPP):
             logging.error("No response from server.")
             self.disconnect()
 
-
-    def rcv_message(self, msg):
+    def recv_message(self, msg):
         """ Handles incoming messages. """
 
         if msg['type'] in ('chat', 'normal'):
-            msg.reply("Thanks for sending\n%(body)s" % msg).send() #msg['body']
+            print(f"Message received from {msg['from'].username}: {msg['body']}")
+            # msg.reply("Thanks for sending\n%(body)s" % msg).send() #msg['body']
             
         elif msg['type'] in ('error'):
             print('An error has ocurred.')
@@ -103,14 +85,12 @@ class Client(slixmpp.ClientXMPP):
         elif msg['type'] in ('groupchat'):
             print('Groupchat message received.')
 
-
-    def send_message(self, recipient, message, mtype='chat'):
+    def message(self, recipient, message, mtype='chat'):
         """ Sends message to another user in server. """
 
         self.send_message(recipient, message, mtype)
 
-
-    def rcv_muc_message(self, msg):
+    def recv_muc_message(self, msg):
         """ Process incoming message stanzas from any chat room. Be aware
             that if you also have any handlers for the 'message' event,
             message stanzas may be processed by both handlers, so check
@@ -118,10 +98,6 @@ class Client(slixmpp.ClientXMPP):
 
             Whenever the bot's nickname is mentioned, respond to
             the message.
-
-            IMPORTANT: Always check that a message is not from yourself,
-                    otherwise you will create an infinite loop responding
-                    to your own messages.
 
             This handler will reply to messages that mention
             the bot's nickname.
@@ -138,7 +114,6 @@ class Client(slixmpp.ClientXMPP):
                 mbody="I heard that, %s." % msg['mucnick'],
                 mtype='groupchat'
             )
-
 
     def muc_online(self, presence):
         """ Process a presence stanza from a chat room. In this case,
@@ -159,5 +134,53 @@ class Client(slixmpp.ClientXMPP):
                 mtype='groupchat'
             )
 
+    async def app(self, event):
+        IN_APP_LOOP = True
+
+        while IN_APP_LOOP:
+            print(settings.MAIN_MENU)
+            option = int(await ainput("\nSelect an option: "))
+
+            if option==1: # Add contact
+                print("Ingrese el contacto que desea agregar:")
+                pass
+
+            elif option==2: # Show contact details
+                print("Show contact details")
+                pass
+
+            elif option==3: # Send direct message
+                recipient = str(await ainput("Send message to: "))
+                msg = str(await ainput(">>: "))
+
+                self.message(recipient, msg)
+                pass
+
+            elif option==4: # Change presence
+                print("Change presence")
+                pass
+
+            elif option==5: # Groupchat
+                print("Groupchat")
+                pass
+
+            elif option==6: # Logout
+                print("Logout")
+                IN_APP_LOOP = False
+                self.disconnect()
+                pass
+
+            elif option==7: # Delete my account
+                print("Delete my account")
+                await self.unregister()
+                pass
+
+            elif option==8: # Exit
+                print("Exit")
+                print("Goodbye!")
+                sys.exit()
+
+            else:
+                print("Enter a valid option.")
 
 
