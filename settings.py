@@ -42,3 +42,10 @@ MAIN_MENU = """
         8. Delete my account
         9. Exit
 """
+
+PSHOW_MENU = """"
+1. Away
+2. Chat
+3. Do not disturb
+4. Extended away
+"""

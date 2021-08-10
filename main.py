@@ -16,11 +16,6 @@ from xmpp_client import Client
 xmpp = None
 
 
-def get_input():
-    data = input()
-    return data
-
-
 def main():
     RUNNING = True
 
@@ -39,8 +34,8 @@ def main():
                 jid = str(input("JID: "))
                 pwd = str(getpass("Password: "))
 
-            # if "@alumchat.xyz" not in jid:
-            #     jid = jid + "@alumchat.xyz"
+            if "@alumchat.xyz" not in jid:
+                jid = jid + "@alumchat.xyz"
 
             xmpp = RegisterBot(jid, pwd)
 

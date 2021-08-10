@@ -10,6 +10,13 @@ from slixmpp.exceptions import IqError, IqTimeout, XMPPError
 from aioconsole import ainput
 
 
+def check_jid(jid, domain="@alumchat.xyz"):
+    if jid[-13:] != domain:
+        jid += domain
+    
+    return jid
+
+
 class Client(slixmpp.ClientXMPP):
 
     def __init__(self, jid, password):
@@ -141,7 +148,7 @@ class Client(slixmpp.ClientXMPP):
 
 
     def print_roster(self):
-        print('Roster for %s' % self.boundjid.bare)
+        print('Roster for %s' % self.boundjid.username)
         groups = self.client_roster.groups()
         for group in groups:
             print('\n%s' % group)
@@ -180,7 +187,34 @@ class Client(slixmpp.ClientXMPP):
                 self.send_presence_subscription(pto=recipient)
 
             elif option==3: # Show contact details
-                print(self.client_roster)
+                contact = str(await ainput("\nContact's username: "))
+
+                if contact in self.client_roster:
+
+                    print("Name: ", self.client_roster[contact]['name'] or contact)
+                    conns = self.client_roster.presence(contact)
+                    for res, pres in conns.items():
+                        show = 'available'
+                        if pres['show']:
+                            show = pres['show']
+                        print('   - %s (%s)' % (res, show))
+                        if pres['status']:
+                            print('       %s' % pres['status'])
+
+
+                    groups = self.client_roster[contact]['groups']
+                    if not groups:
+                        print("\nNo shared groups.")
+                    else:
+                        print("Shared groups: ")
+                        for group in groups:
+                            print(f"\t{group}")
+                
+                else:
+                    print(f"{contact} is not in your contacts!")
+
+
+
                 pass
 
             elif option==4: # Send direct message
@@ -190,9 +224,14 @@ class Client(slixmpp.ClientXMPP):
                 self.message(recipient, msg)
 
             elif option==5: # Change presence
-                print("Change presence")
-                pass
+                print(settings.PSHOW_MENU)
+                show = str(await ainput("Select showtype: "))
+                status = str(await ainput("Status: "))
+                nick = str(await ainput("Nickname: "))
+                
+                self.send_presence(pshow=show, pstatus=status, pnick=nick)
 
+            # TODO
             elif option==6: # Groupchat
                 recipient = str(await ainput("Groupchat: "))
                 msg = str(await ainput(">>: "))
