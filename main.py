@@ -10,7 +10,7 @@ from getpass import getpass
 from slixmpp.exceptions import IqTimeout
 
 from register_account import RegisterBot
-from xmpp_client import Client
+from xmpp_client import Client, clean_jid
 
 
 xmpp = None
@@ -34,8 +34,7 @@ def main():
                 jid = str(input("JID: "))
                 pwd = str(getpass("Password: "))
 
-            if "@alumchat.xyz" not in jid:
-                jid = jid + "@alumchat.xyz"
+            jid = clean_jid(jid)
 
             xmpp = RegisterBot(jid, pwd)
 

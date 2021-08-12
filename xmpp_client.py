@@ -10,7 +10,7 @@ from slixmpp.exceptions import IqError, IqTimeout, XMPPError
 from aioconsole import ainput
 
 
-def check_jid(jid, domain="@alumchat.xyz"):
+def clean_jid(jid, domain="@alumchat.xyz"):
     if jid[-13:] != domain:
         jid += domain
     
@@ -22,21 +22,34 @@ class Client(slixmpp.ClientXMPP):
     def __init__(self, jid, password):
         super().__init__(jid, password)
 
-        #Plugins
+        self.nick = None
 
+        # PLUGINS
         self.register_plugin('xep_0030') # Service Discovery
         self.register_plugin('xep_0199') # XMPP Ping
         self.register_plugin('xep_0059')
         self.register_plugin('xep_0060')
+        self.register_plugin('xep_0085') # Chat State Notifications
         self.register_plugin('xep_0077') # In-Band Registration
         self.register_plugin('xep_0045') # Multi-User Chat
+        self.register_plugin('xep_0066')
+        self.register_plugin('xep_0071')
+        self.register_plugin('xep_0128')
+        self.register_plugin('xep_0363')
 
-        # Event handlers
+        # EVENT HANDLERS
         self.add_event_handler("session_start", self.session_start)
         self.add_event_handler("session_start", self.app)
         self.add_event_handler("message", self.recv_message)
         self.add_event_handler("groupchat_message", self.recv_muc_message)
         self.add_event_handler("changed_status", self.wait_for_presences)
+        self.add_event_handler("groupchat_presence", self.muc_online)
+        # Notifications
+        self.add_event_handler("chatstate_active", self.recv_notifications)
+        self.add_event_handler("chatstate_composing", self.recv_notifications)
+        self.add_event_handler("chatstate_gone", self.recv_notifications)
+        self.add_event_handler("chatstate_inactive", self.recv_notifications)
+        self.add_event_handler("chatstate_paused", self.recv_notifications)
 
         self.received = set()
         self.presences_received = asyncio.Event()
@@ -83,14 +96,16 @@ class Client(slixmpp.ClientXMPP):
             print('An error has ocurred.')
 
         elif msg['type'] in ('headline'):
-            print('Headline message received.')
+            print(f"Headline: {msg['body']}")
 
         elif msg['type'] in ('groupchat'):
-            print('Groupchat message received.')
+            print(f"Message received from {msg['from'].username}: {msg['body']}")
 
 
     def message(self, recipient, message, mtype='chat'):
         """ Sends message to another user in server. """
+
+        recipient = clean_jid(recipient) # Check for domain
 
         self.send_message(recipient, message, mtype)
 
@@ -106,45 +121,36 @@ class Client(slixmpp.ClientXMPP):
 
         if msg['mucnick'] != self.nick and self.nick in msg['body']:
             logging.info(f"You've been mentioned by {msg['mucnick']}")
-            # self.send_message(
-            #     mto=msg['from'].bare,
-            #     mbody="I heard that, %s." % msg['mucnick'],
-            #     mtype='groupchat'
-            # )
-
-
-    def muc_online(self, presence):
-        """ Process a presence stanza from a chat room. In this case,
-            presences from users that have just come online are
-            handled by sending a welcome message that includes
-            the user's nickname and role in the room.
-
-            Arguments:
-                presence -- The received presence stanza. See the
-                            documentation for the Presence stanza
-                            to see how else it may be used.
-        """
-
-        print("Presence stanza: ", presence)
-
-        # if presence['muc']['nick'] != self.nick:
-        #     self.send_message(
-        #         mto=presence['from'].bare,
-        #         mbody=f"Hello, %{presence['muc']['role']} %{presence['muc']['nick']}",
-        #         mtype='groupchat'
-        #     )
 
 
     def wait_for_presences(self, pres):
         """ Track how many roster entries have received presence updates. """
 
         print("Recv presence:", pres)
+        if pres['type']=='unavailable':
+            print(f"{pres['from'].username} is now offline.")
 
         self.received.add(pres['from'].bare)
         if len(self.received) >= len(self.client_roster.keys()):
             self.presences_received.set()
         else:
             self.presences_received.clear()
+
+
+    def muc_online(self, presence):
+        """ Process a presence stanza from a chat room.
+
+            In this case, presences from users that have just come
+            online are handled by sending a welcome message that
+            includes the user's nickname and role in the room.
+        """
+
+        if presence['muc']['nick'] != self.nick:
+            print(f"{presence['from'].bare} {presence['muc']['role']} {presence['muc']['nick']} is online!")
+
+
+    def recv_notifications(self, event):
+        print("0085 - ", event)
 
 
     def print_roster(self):
@@ -184,6 +190,8 @@ class Client(slixmpp.ClientXMPP):
 
             elif option==2: # Add contact
                 recipient = str(await ainput("\nUsername of new contact: "))
+                recipient = clean_jid(recipient)
+
                 self.send_presence_subscription(pto=recipient)
 
             elif option==3: # Show contact details
@@ -233,28 +241,68 @@ class Client(slixmpp.ClientXMPP):
 
             # TODO
             elif option==6: # Groupchat
-                recipient = str(await ainput("Groupchat: "))
-                msg = str(await ainput(">>: "))
+                room = str(await ainput("Room: "))
+                nick = str(await ainput("Nickname: "))
 
-                self.message(recipient, msg, mtype='groupchat')
+                self.nick = nick
 
-            elif option==7: # Logout
+                self.plugin['xep_0045'].join_muc(room, nick)
+
+                IN_MUC = True
+
+                while IN_MUC:
+                    print(settings.MUC_MENU)
+                    muc_option = int(await ainput("Select an option: "))
+                    if muc_option==1:
+                        recipient = str(await ainput("Recipient: "))
+                        msg = str(await ainput("Message: "))
+                        self.send_message(recipient, msg, mtype='groupchat')
+                    elif muc_option==2:
+                        print(f"Leaving {room}")
+                        self.nick = None
+                        self.plugin['xep_0045'].leave_muc(room, nick)
+                    else:
+                        print("Not a valid option.")
+
+            elif option==7: # Send file
+                recipient = str(await ainput("Recipient: "))
+                filename = str(await ainput("Filename: "))
+                domain = str(await ainput("Domain: "))
+
+                try:
+                    url = await self['xep_0363'].upload_file(
+                        filename, domain=domain, timeout=10
+                    )
+                except IqTimeout:
+                    raise TimeoutError('Could not send message in time')
+                logging.info('Upload success!')
+
+                logging.info('Sending file to %s', recipient)
+                html = (
+                    f'<body xmlns="http://www.w3.org/1999/xhtml">'
+                    f'<a href="{url}">{url}</a></body>'
+                )
+                message = self.make_message(mto=recipient, mbody=url, mhtml=html)
+                message['oob']['url'] = url
+                message.send()        
+
+            elif option==8: # Logout
                 print("Logout")
                 IN_APP_LOOP = False
                 self.disconnect()
                 pass
 
-            elif option==8: # Delete my account
+            elif option==9: # Delete my account
                 print("Delete my account")
                 await self.unregister()
                 pass
 
-            elif option==9: # Exit
+            elif option==10: # Exit
                 print("Exit")
                 print("Goodbye!")
                 sys.exit()
 
             else:
-                print("Enter a valid option.")
+                print("Not a valid option.")
 
 

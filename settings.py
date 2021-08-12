@@ -38,9 +38,10 @@ MAIN_MENU = """
         4. Send direct message
         5. Change presence
         6. Start groupchat
-        7. Logout
-        8. Delete my account
-        9. Exit
+        7. Send file
+        8. Logout
+        9. Delete my account
+        10. Exit
 """
 
 PSHOW_MENU = """"
@@ -48,4 +49,9 @@ PSHOW_MENU = """"
 2. Chat
 3. Do not disturb
 4. Extended away
+"""
+
+MUC_MENU = """"
+1. Chat
+2. Exit groupchat
 """
