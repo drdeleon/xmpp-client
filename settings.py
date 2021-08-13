@@ -44,14 +44,16 @@ MAIN_MENU = """
         10. Exit
 """
 
-PSHOW_MENU = """"
+PSHOW_MENU = """
 1. Away
 2. Chat
 3. Do not disturb
 4. Extended away
 """
 
-MUC_MENU = """"
+MUC_MENU = """
 1. Chat
 2. Exit groupchat
 """
+
+TEST_ROOM = "test@conference.alumchat.xyz"

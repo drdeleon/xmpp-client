@@ -89,7 +89,7 @@ class Client(slixmpp.ClientXMPP):
         """ Handles incoming messages. """
 
         if msg['type'] in ('chat', 'normal'):
-            print(f"Message received from {msg['from'].username}: {msg['body']}")
+            print(f"{msg['from'].username}: {msg['body']}")
             # msg.reply("Thanks for sending\n%(body)s" % msg).send() #msg['body']
             
         elif msg['type'] in ('error'):
@@ -99,15 +99,20 @@ class Client(slixmpp.ClientXMPP):
             print(f"Headline: {msg['body']}")
 
         elif msg['type'] in ('groupchat'):
-            print(f"Message received from {msg['from'].username}: {msg['body']}")
+            print(f"{msg['from'].username}: {msg['body']}")
 
 
-    def message(self, recipient, message, mtype='chat'):
+    def message(self, recipient, message=None, chat_state='active', mtype='chat'):
         """ Sends message to another user in server. """
 
         recipient = clean_jid(recipient) # Check for domain
+        msg = self.Message()
+        msg['chat_state'] = chat_state
+        msg['to'] = recipient
+        msg['body'] = message
+        msg['type'] = mtype 
 
-        self.send_message(recipient, message, mtype)
+        msg.send()
 
 
     def recv_muc_message(self, msg):
@@ -126,7 +131,6 @@ class Client(slixmpp.ClientXMPP):
     def wait_for_presences(self, pres):
         """ Track how many roster entries have received presence updates. """
 
-        print("Recv presence:", pres)
         if pres['type']=='unavailable':
             print(f"{pres['from'].username} is now offline.")
 
@@ -150,7 +154,12 @@ class Client(slixmpp.ClientXMPP):
 
 
     def recv_notifications(self, event):
-        print("0085 - ", event)
+        if event['chat_state'] == 'active':
+            print(f"{event['from'].username} is active.")
+        elif event['chat_state'] == 'composing':
+            print(f"{event['from'].username} is typing...")
+        elif event['chat_state'] == 'gone':
+            print(f"{event['from'].username} is gone.")
 
 
     def print_roster(self):
@@ -189,13 +198,13 @@ class Client(slixmpp.ClientXMPP):
                 self.print_roster()
 
             elif option==2: # Add contact
-                recipient = str(await ainput("\nUsername of new contact: "))
+                recipient = str(await ainput("\nJID of new contact: "))
                 recipient = clean_jid(recipient)
 
                 self.send_presence_subscription(pto=recipient)
 
             elif option==3: # Show contact details
-                contact = str(await ainput("\nContact's username: "))
+                contact = str(await ainput("\nContact's JID: "))
 
                 if contact in self.client_roster:
 
@@ -221,15 +230,25 @@ class Client(slixmpp.ClientXMPP):
                 else:
                     print(f"{contact} is not in your contacts!")
 
-
-
-                pass
-
             elif option==4: # Send direct message
-                recipient = str(await ainput("Send message to: "))
-                msg = str(await ainput(">>: "))
+                recipient = str(await ainput("JID: "))
+                recipient = clean_jid(recipient)
 
-                self.message(recipient, msg)
+                print(f"\nChatting with {recipient}")
+                print("Type 'exit' to exit chat.")
+
+                IN_CHAT = True
+
+                self.message(recipient, chat_state='active')
+
+                while IN_CHAT:
+                    self.message(recipient, chat_state='composing')
+                    msg = str(await ainput(">> "))
+                    if msg != 'exit':
+                        self.message(recipient, msg)
+                    else:
+                        self.message(recipient, chat_state='gone')
+                        IN_CHAT = False
 
             elif option==5: # Change presence
                 print(settings.PSHOW_MENU)
@@ -239,7 +258,6 @@ class Client(slixmpp.ClientXMPP):
                 
                 self.send_presence(pshow=show, pstatus=status, pnick=nick)
 
-            # TODO
             elif option==6: # Groupchat
                 room = str(await ainput("Room: "))
                 nick = str(await ainput("Nickname: "))
@@ -248,22 +266,25 @@ class Client(slixmpp.ClientXMPP):
 
                 self.plugin['xep_0045'].join_muc(room, nick)
 
-                IN_MUC = True
+                print(f"Joined {room}!")
+                print("Type 'exit' to exit room.")
 
-                while IN_MUC:
-                    print(settings.MUC_MENU)
-                    muc_option = int(await ainput("Select an option: "))
-                    if muc_option==1:
-                        recipient = str(await ainput("Recipient: "))
-                        msg = str(await ainput("Message: "))
-                        self.send_message(recipient, msg, mtype='groupchat')
-                    elif muc_option==2:
+                IN_CHAT = True
+
+                self.message(room, chat_state='active', mtype='groupchat')
+
+                while IN_CHAT:
+                    self.message(room, chat_state='composing', mtype='groupchat')
+                    msg = str(await ainput(">> "))
+                    if msg != 'exit':
+                        self.message(room, msg, mtype='groupchat')
+                    else:
                         print(f"Leaving {room}")
+                        self.message(room, chat_state='gone', mtype='groupchat')
                         self.nick = None
                         self.plugin['xep_0045'].leave_muc(room, nick)
-                    else:
-                        print("Not a valid option.")
-
+                        pass
+                
             elif option==7: # Send file
                 recipient = str(await ainput("Recipient: "))
                 filename = str(await ainput("Filename: "))
