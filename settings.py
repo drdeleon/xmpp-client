@@ -9,7 +9,7 @@ load_dotenv(find_dotenv())
 # Environment variables
 JID = os.environ.get("JID")
 PASSWORD = os.environ.get("PASSWORD")
-DEBUG = os.environ.get("DEBUG").lower()=='true'
+DEBUG = bool(os.environ.get("DEBUG")) and os.environ.get("DEBUG").lower()=='true'
 
 # Logging
 log_lvl = logging.DEBUG if DEBUG else logging.ERROR
@@ -49,11 +49,6 @@ PSHOW_MENU = """
 2. Chat
 3. Do not disturb
 4. Extended away
-"""
-
-MUC_MENU = """
-1. Chat
-2. Exit groupchat
 """
 
 TEST_ROOM = "test@conference.alumchat.xyz"
