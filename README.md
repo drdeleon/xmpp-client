@@ -1,6 +1,11 @@
 # xmpp-client
 XMPP client implementation.
 
+## Installing
+1. Clone de repository
+2. Install dependencies with `pip install -r requirements.txt`
+3. Run and enjoy chatting!
+
 ## Functionality
 ### Account administration
 - Register a new account in a server
