@@ -10,6 +10,8 @@ load_dotenv(find_dotenv())
 JID = os.environ.get("JID")
 PASSWORD = os.environ.get("PASSWORD")
 DEBUG = bool(os.environ.get("DEBUG")) and os.environ.get("DEBUG").lower()=='true'
+TESTING = bool(os.environ.get("TESTING")) and os.environ.get("TESTING").lower()=='true'
+TEST_ROOM = os.environ.get("TEST_ROOM") or "test@conference.alumchat.xyz"
 
 # Logging
 log_lvl = logging.DEBUG if DEBUG else logging.ERROR
@@ -50,5 +52,3 @@ PSHOW_MENU = """
 3. Do not disturb
 4. Extended away
 """
-
-TEST_ROOM = "test@conference.alumchat.xyz"

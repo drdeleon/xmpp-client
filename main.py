@@ -28,7 +28,7 @@ def main():
 
         if init_option==1: # Registration 
 
-            if settings.JID and settings.PASSWORD:
+            if settings.TESTING and settings.JID and settings.PASSWORD:
                 jid, pwd = settings.JID, settings.PASSWORD
             else:
                 jid = str(input("JID: "))
@@ -48,7 +48,7 @@ def main():
 
         if init_option==2: # Login 
 
-            if settings.JID and settings.PASSWORD:
+            if settings.TESTING and settings.JID and settings.PASSWORD:
                 jid, pwd = settings.JID, settings.PASSWORD
             else:
                 jid = str(input("JID: "))

@@ -259,7 +259,10 @@ class Client(slixmpp.ClientXMPP):
                 self.send_presence(pshow=show, pstatus=status, pnick=nick)
 
             elif option==6: # Groupchat
-                room = str(await ainput("Room: "))
+                if settings.TESTING and settings.TEST_ROOM:
+                    room = settings.TEST_ROOM
+                else:
+                    room = str(await ainput("Room: "))
                 nick = str(await ainput("Nickname: "))
 
                 self.nick = nick
@@ -271,19 +274,15 @@ class Client(slixmpp.ClientXMPP):
 
                 IN_CHAT = True
 
-                self.message(room, chat_state='active', mtype='groupchat')
-
                 while IN_CHAT:
-                    self.message(room, chat_state='composing', mtype='groupchat')
                     msg = str(await ainput(">> "))
                     if msg != 'exit':
-                        self.message(room, msg, mtype='groupchat')
+                        self.send_message(room, msg, mtype='groupchat')
                     else:
                         print(f"Leaving {room}")
-                        self.message(room, chat_state='gone', mtype='groupchat')
                         self.nick = None
                         self.plugin['xep_0045'].leave_muc(room, nick)
-                        pass
+                        IN_CHAT = False
                 
             elif option==7: # Send file
                 recipient = str(await ainput("Recipient: "))
