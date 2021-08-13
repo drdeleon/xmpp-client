@@ -42,7 +42,7 @@ class RegisterBot(slixmpp.ClientXMPP):
 
         try:
             await resp.send()
-            logging.info("Account created for %s!" % self.boundjid)
+            print("Account created for %s!" % self.boundjid)
             
         except IqError as e:
             if e.iq['error']['code']=='409':
